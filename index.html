@@ -240,13 +240,12 @@
     position: relative;
     height: 62vh;
     margin: 1rem 0 3rem;
-    perspective: 1400px;
   }
   .browse.active{ display:block; }
   .browse-track{
     position:absolute; inset:0;
     display:flex; align-items:center; justify-content:center;
-    transform-style: preserve-3d;
+    perspective: 1400px;
   }
   .browse-item{
     position:absolute;
@@ -255,10 +254,11 @@
     box-shadow: 0 25px 60px -15px rgba(0,0,0,0.75);
     border-radius: 2px;
     cursor: pointer;
-    transition: transform .5s cubic-bezier(.2,.8,.2,1), opacity .5s ease, filter .5s ease;
+    transition: transform .6s cubic-bezier(.22,.8,.25,1), opacity .6s ease, filter .6s ease;
     user-select:none;
     -webkit-user-drag: none;
     backface-visibility: hidden;
+    will-change: transform, opacity;
   }
   .browse-caption{
     text-align:center;
@@ -435,7 +435,7 @@
       sec.appendChild(secGrid);
       sectionsEl.appendChild(sec);
     });
-    if(document.getElementById('browse').classList.contains('active')) renderBrowse();
+    buildBrowseItems();
   }
 
   function populateGroupSelect(){
@@ -483,51 +483,65 @@
 
   /* ---------- Blätteransicht (Coverflow) ---------- */
   let browseIndex = 0;
+  let browseEls = []; // { idx, el } — bleiben zwischen Navigationen bestehen, damit CSS-Übergänge greifen
   const browseTrack = document.getElementById('browseTrack');
   const browseCaption = document.getElementById('browseCaption');
+  const BROWSE_RANGE = 3;
 
-  function renderBrowse(){
-    browseTrack.innerHTML = '';
-    const images = manifest.images;
-    if(!images.length){ browseCaption.style.display = 'none'; return; }
+  function clampBrowseIndex(){
     if(browseIndex < 0) browseIndex = 0;
-    if(browseIndex >= images.length) browseIndex = images.length - 1;
+    if(browseIndex >= manifest.images.length) browseIndex = Math.max(0, manifest.images.length - 1);
+  }
 
-    const range = 3;
-    for(let offset = -range; offset <= range; offset++){
-      const idx = browseIndex + offset;
-      if(idx < 0 || idx >= images.length) continue;
-      const item = images[idx];
+  function buildBrowseItems(){
+    browseTrack.innerHTML = '';
+    browseEls = manifest.images.map((item, idx) => {
       const img = document.createElement('img');
       img.className = 'browse-item';
       img.loading = 'lazy';
       img.src = RAW + '/images/' + encodeURIComponent(item.file);
       img.alt = item.title || '';
-      const abs = Math.abs(offset);
+      img.addEventListener('click', () => {
+        if(idx === browseIndex) openLightbox(img.src);
+        else { browseIndex = idx; updateBrowsePositions(); }
+      });
+      browseTrack.appendChild(img);
+      return { idx, el: img };
+    });
+    clampBrowseIndex();
+    updateBrowsePositions();
+  }
+
+  function updateBrowsePositions(){
+    if(!manifest.images.length){ browseCaption.style.display = 'none'; return; }
+    clampBrowseIndex();
+    browseEls.forEach(({ idx, el }) => {
+      const offset = idx - browseIndex;
+      const rawAbs = Math.abs(offset);
+      const abs = Math.min(rawAbs, BROWSE_RANGE + 1);
       const sign = offset === 0 ? 0 : (offset < 0 ? -1 : 1);
-      const scale = offset === 0 ? 1 : Math.max(0.6, 1 - abs * 0.14);
-      // nicht-linearer Versatz: jedes weitere Bild rückt weniger weit zusätzlich nach außen,
+      const inRange = rawAbs <= BROWSE_RANGE;
+      const scale = offset === 0 ? 1 : Math.max(0.6, 1 - abs * 0.12);
+      // nicht-linearer Versatz: jedes weitere Bild rückt weniger zusätzlich nach außen,
       // dadurch verdecken sich die Bilder gegenseitig statt frei nebeneinander zu stehen
       const translate = sign * (abs === 0 ? 0 : 11 + (abs - 1) * 8.5); // vw
       const rotate = sign * (abs === 0 ? 0 : Math.min(34, 20 + (abs - 1) * 6)); // Grad
-      img.style.transform =
-        'translateX(' + translate + 'vw) rotateY(' + (-rotate) + 'deg) scale(' + scale + ')';
-      img.style.zIndex = String(100 - abs);
-      img.style.opacity = String(offset === 0 ? 1 : Math.max(0.35, 1 - abs * 0.18));
-      img.style.filter = offset === 0 ? 'none' : 'brightness(0.5)';
-      img.addEventListener('click', () => {
-        if(idx === browseIndex) openLightbox(img.src);
-        else { browseIndex = idx; renderBrowse(); }
-      });
-      browseTrack.appendChild(img);
-    }
+      const depth = -abs * 70; // px — schiebt weiter entfernte Bilder in die Tiefe (korrekte Stapelung mit Perspektive)
+      el.style.transform =
+        'translateX(' + translate + 'vw) translateZ(' + depth + 'px) rotateY(' + (-rotate) + 'deg) scale(' + scale + ')';
+      el.style.zIndex = String(100 - rawAbs);
+      el.style.opacity = inRange ? String(offset === 0 ? 1 : Math.max(0.35, 1 - abs * 0.18)) : '0';
+      el.style.filter = offset === 0 ? 'none' : 'brightness(0.5)';
+      el.style.pointerEvents = inRange ? 'auto' : 'none';
+    });
     browseCaption.style.display = 'block';
-    browseCaption.innerHTML = (images[browseIndex].title || images[browseIndex].file) +
-      ' <span class="brass">' + String(browseIndex + 1).padStart(2,'0') + ' / ' + String(images.length).padStart(2,'0') + '</span>';
+    const cur = manifest.images[browseIndex];
+    browseCaption.innerHTML = (cur.title || cur.file) +
+      ' <span class="brass">' + String(browseIndex + 1).padStart(2,'0') + ' / ' + String(manifest.images.length).padStart(2,'0') + '</span>';
   }
 
-  function browsePrev(){ if(browseIndex > 0){ browseIndex--; renderBrowse(); } }
-  function browseNext(){ if(browseIndex < manifest.images.length - 1){ browseIndex++; renderBrowse(); } }
+  function browsePrev(){ if(browseIndex > 0){ browseIndex--; updateBrowsePositions(); } }
+  function browseNext(){ if(browseIndex < manifest.images.length - 1){ browseIndex++; updateBrowsePositions(); } }
   document.getElementById('browsePrev').addEventListener('click', browsePrev);
   document.getElementById('browseNext').addEventListener('click', browseNext);
 
@@ -555,7 +569,7 @@
     document.getElementById('viewBrowseBtn').classList.toggle('active', isBrowse);
     emptyEl.style.display = manifest.images.length ? 'none' : (isBrowse ? 'none' : 'block');
     browseCaption.style.display = isBrowse && manifest.images.length ? 'block' : 'none';
-    if(isBrowse) renderBrowse();
+    if(isBrowse) updateBrowsePositions();
   }
   document.getElementById('viewGridBtn').addEventListener('click', () => setView('grid'));
   document.getElementById('viewBrowseBtn').addEventListener('click', () => setView('browse'));
