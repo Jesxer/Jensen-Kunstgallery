@@ -3,20 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Galerie</title>
+<title>Gudrun Jensen</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,450;9..144,600&family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* =========================================================
-   KONFIGURATION —          hier deine GitHub-Daten eintragen
+   KONFIGURATION — hier deine GitHub-Daten eintragen
    ========================================================= */
 </style>
 <script>
-const CONFIG = {
-  owner: "Jesxer",
-  repo:  "Jensen-Kunstgallery",
-  branch: "main"
-};
+  const CONFIG = {
+    owner: "DEIN-GITHUB-NUTZERNAME",   // z.B. "Jesxer"
+    repo:  "DEIN-REPO-NAME",           // z.B. "kunstgalerie"
+    branch: "main"
+  };
 </script>
 <style>
   :root{
@@ -90,6 +90,31 @@ const CONFIG = {
     margin-top: 0.8rem;
     color: var(--brass-dim);
   }
+
+  .group-section{ margin-bottom: 3.5rem; }
+  .group-heading{
+    display:flex; align-items:baseline; gap: 0.7rem;
+    margin: 0 0 1.4rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid #2c2a25;
+  }
+  .group-heading h2{
+    font-family:'Fraunces', serif;
+    font-weight: 450;
+    font-size: 1.4rem;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .group-heading .edit-group{
+    display:none;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.62rem; letter-spacing: 0.05em;
+    color: var(--ink-dim);
+    background:none; border: 1px solid #3a362f; border-radius: 999px;
+    padding: 0.2rem 0.6rem; cursor:pointer;
+  }
+  .group-heading .edit-group:hover{ color: var(--brass); border-color: var(--brass-dim); }
+  body.curator .group-heading .edit-group{ display:inline-block; }
 
   .grid{
     column-width: 320px;
@@ -170,7 +195,7 @@ const CONFIG = {
     position: fixed; bottom: 22px; right: 22px; z-index: 100;
     display:flex; gap: 0.6rem; align-items:center;
   }
-  .curator-bar button, .curator-bar label{
+  .curator-bar button, .curator-bar label, .curator-bar select{
     font-family:'IBM Plex Mono', monospace;
     font-size: 0.68rem; letter-spacing: 0.05em;
     background: var(--mat); color: var(--ink-dim);
@@ -178,9 +203,10 @@ const CONFIG = {
     padding: 0.55rem 1rem; cursor:pointer;
     transition: color .2s, border-color .2s;
   }
-  .curator-bar button:hover, .curator-bar label:hover{
+  .curator-bar button:hover, .curator-bar label:hover, .curator-bar select:hover{
     color: var(--brass); border-color: var(--brass-dim);
   }
+  .curator-bar select{ max-width: 140px; }
   body.curator .curator-bar .login-only{ display:none; }
   .curator-bar .logged-only{ display:none; }
   body.curator .curator-bar .logged-only{ display:inline-flex; }
@@ -202,8 +228,8 @@ const CONFIG = {
 <body>
 
 <header>
-  <div class="eyebrow">Private Sammlung</div>
-  <h1>Galerie</h1>
+  <div class="eyebrow">Werke von</div>
+  <h1>Gudrun Jensen</h1>
   <div class="sub">Eine kuratierte Wand — ausschließlich Bilder.</div>
 </header>
 
@@ -212,7 +238,8 @@ const CONFIG = {
     Die Wand ist noch leer.
     <small>Über den Kurator-Zugang unten rechts können Werke hinzugefügt werden.</small>
   </div>
-  <div id="grid" class="grid"></div>
+  <div id="sections"></div>
+  <div id="grid" class="grid" style="display:none"></div>
 </main>
 
 <div class="dropzone" id="dropzone">Bild hier ablegen</div>
@@ -226,6 +253,8 @@ const CONFIG = {
 
 <div class="curator-bar">
   <button class="login-only" id="loginBtn">Kurator-Zugang</button>
+  <select class="logged-only" id="groupSelect" title="Gruppe für neue Bilder"></select>
+  <button class="logged-only" id="addGroupBtn">+ Gruppe</button>
   <label class="logged-only" for="fileInput">+ Bild hinzufügen</label>
   <input type="file" id="fileInput" accept="image/*" multiple>
   <button class="logged-only" id="logoutBtn">Abmelden</button>
@@ -236,6 +265,7 @@ const CONFIG = {
   const API = "https://api.github.com/repos/" + CONFIG.owner + "/" + CONFIG.repo;
   const RAW = "https://raw.githubusercontent.com/" + CONFIG.owner + "/" + CONFIG.repo + "/" + CONFIG.branch;
   const grid = document.getElementById('grid');
+  const sectionsEl = document.getElementById('sections');
   const emptyEl = document.getElementById('empty');
   const statusEl = document.getElementById('status');
   const TOKEN_KEY = 'galerie_pat';
@@ -250,34 +280,122 @@ const CONFIG = {
     document.body.classList.toggle('curator', !!getToken());
   }
 
-  /* ---------- Manifest laden & rendern ---------- */
-  let manifest = [];
-  let manifestSha = null;
+  /* ---------- Manifest laden & rendern ----------
+     Format: { groups: ["Name1","Name2"], images: [{file,title,group}] }
+     Ältere Manifeste (einfaches Array ohne Gruppen) werden automatisch migriert. */
+  let manifest = { groups: [], images: [] };
+  const UNGROUPED = '';
+  const UNGROUPED_LABEL = 'Ohne Gruppe';
+
+  function normalizeManifest(raw){
+    if(Array.isArray(raw)){
+      return { groups: [], images: raw.map(it => ({ file: it.file, title: it.title, group: it.group || UNGROUPED })) };
+    }
+    return {
+      groups: (raw && raw.groups) || [],
+      images: ((raw && raw.images) || []).map(it => ({ file: it.file, title: it.title, group: it.group || UNGROUPED }))
+    };
+  }
 
   async function loadManifest(){
     try{
       const res = await fetch(RAW + "/images/manifest.json?_=" + Date.now());
       if(!res.ok) throw new Error("kein Manifest gefunden");
-      manifest = await res.json();
+      manifest = normalizeManifest(await res.json());
     }catch(e){
-      manifest = [];
+      manifest = { groups: [], images: [] };
     }
     render();
+    populateGroupSelect();
   }
 
   function render(){
-    grid.innerHTML = '';
-    emptyEl.style.display = manifest.length ? 'none' : 'block';
-    manifest.forEach((item, i) => {
-      const fig = document.createElement('figure');
-      fig.innerHTML =
-        '<img loading="lazy" src="' + RAW + '/images/' + encodeURIComponent(item.file) + '" alt="' + (item.title || '') + '">' +
-        '<figcaption><span>' + (item.title || item.file) + '</span><span class="num">' + String(i+1).padStart(2,'0') + '</span></figcaption>' +
-        '<div class="del" title="Entfernen">&times;</div>';
-      fig.querySelector('img').addEventListener('click', () => openLightbox(fig.querySelector('img').src));
-      fig.querySelector('.del').addEventListener('click', (ev) => { ev.stopPropagation(); removeImage(item); });
-      grid.appendChild(fig);
+    sectionsEl.innerHTML = '';
+    emptyEl.style.display = manifest.images.length ? 'none' : 'block';
+
+    const sections = manifest.groups.map(g => ({ name: g, items: [] }));
+    const ungrouped = { name: UNGROUPED, items: [] };
+    manifest.images.forEach(item => {
+      const section = sections.find(s => s.name === item.group);
+      (section || ungrouped).items.push(item);
     });
+    if(ungrouped.items.length) sections.push(ungrouped);
+
+    sections.forEach(section => {
+      if(!section.items.length && section.name !== UNGROUPED) {
+        if(!document.body.classList.contains('curator')) return; // leere Gruppen nur im Kurator-Modus zeigen
+      }
+      const sec = document.createElement('div');
+      sec.className = 'group-section';
+
+      const heading = document.createElement('div');
+      heading.className = 'group-heading';
+      heading.innerHTML =
+        '<h2>' + (section.name || UNGROUPED_LABEL) + '</h2>' +
+        (section.name ? '<button class="edit-group">umbenennen</button>' : '');
+      if(section.name){
+        heading.querySelector('.edit-group').addEventListener('click', () => renameGroup(section.name));
+      }
+      sec.appendChild(heading);
+
+      const secGrid = document.createElement('div');
+      secGrid.className = 'grid';
+      section.items.forEach((item, i) => {
+        const fig = document.createElement('figure');
+        fig.innerHTML =
+          '<img loading="lazy" src="' + RAW + '/images/' + encodeURIComponent(item.file) + '" alt="' + (item.title || '') + '">' +
+          '<figcaption><span>' + (item.title || item.file) + '</span><span class="num">' + String(i+1).padStart(2,'0') + '</span></figcaption>' +
+          '<div class="del" title="Entfernen">&times;</div>';
+        fig.querySelector('img').addEventListener('click', () => openLightbox(fig.querySelector('img').src));
+        fig.querySelector('.del').addEventListener('click', (ev) => { ev.stopPropagation(); removeImage(item); });
+        secGrid.appendChild(fig);
+      });
+      sec.appendChild(secGrid);
+      sectionsEl.appendChild(sec);
+    });
+  }
+
+  function populateGroupSelect(){
+    const sel = document.getElementById('groupSelect');
+    sel.innerHTML = '<option value="">' + UNGROUPED_LABEL + '</option>' +
+      manifest.groups.map(g => '<option value="' + g.replace(/"/g,'&quot;') + '">' + g + '</option>').join('');
+  }
+
+  async function addGroup(){
+    if(!getToken()) return;
+    const name = prompt('Name der neuen Gruppe:');
+    if(!name) return;
+    const trimmed = name.trim();
+    if(!trimmed || manifest.groups.includes(trimmed)) return;
+    try{
+      const updated = Object.assign({}, manifest, { groups: manifest.groups.concat([trimmed]) });
+      await saveManifest(updated, 'Gruppe hinzugefügt: ' + trimmed);
+      render();
+      populateGroupSelect();
+      document.getElementById('groupSelect').value = trimmed;
+      setStatus('Gruppe „' + trimmed + '" angelegt.');
+    }catch(e){
+      setStatus(e.message, true);
+    }
+  }
+
+  async function renameGroup(oldName){
+    if(!getToken()) return;
+    const name = prompt('Neuer Name für die Gruppe „' + oldName + '":', oldName);
+    if(!name) return;
+    const trimmed = name.trim();
+    if(!trimmed || trimmed === oldName) return;
+    try{
+      const groups = manifest.groups.map(g => g === oldName ? trimmed : g);
+      const images = manifest.images.map(it => it.group === oldName ? Object.assign({}, it, { group: trimmed }) : it);
+      const updated = { groups, images };
+      await saveManifest(updated, 'Gruppe umbenannt: ' + oldName + ' → ' + trimmed);
+      render();
+      populateGroupSelect();
+      setStatus('Gruppe umbenannt in „' + trimmed + '".');
+    }catch(e){
+      setStatus(e.message, true);
+    }
   }
 
   /* ---------- Lightbox ---------- */
@@ -357,6 +475,7 @@ const CONFIG = {
   /* ---------- Upload ---------- */
   async function uploadFiles(files){
     if(!getToken()) return;
+    const targetGroup = document.getElementById('groupSelect').value || UNGROUPED;
     for(const file of files){
       if(!file.type.startsWith('image/')) continue;
       try{
@@ -365,7 +484,9 @@ const CONFIG = {
         const base64 = await fileToBase64(file);
         await ghPut('images/' + filename, base64, 'Bild hinzugefügt: ' + file.name);
         const title = file.name.replace(/\.[^.]+$/, '');
-        const updated = manifest.concat([{ file: filename, title }]);
+        const updated = Object.assign({}, manifest, {
+          images: manifest.images.concat([{ file: filename, title, group: targetGroup }])
+        });
         await saveManifest(updated, 'Manifest aktualisiert: ' + file.name);
         render();
         setStatus(file.name + ' hochgeladen.');
@@ -383,7 +504,9 @@ const CONFIG = {
       setStatus('Entferne ' + item.file + ' …');
       const fileInfo = await ghGet('images/' + item.file);
       if(fileInfo) await ghDelete('images/' + item.file, 'Bild entfernt: ' + item.file, fileInfo.sha);
-      const updated = manifest.filter(m => m.file !== item.file);
+      const updated = Object.assign({}, manifest, {
+        images: manifest.images.filter(m => m.file !== item.file)
+      });
       await saveManifest(updated, 'Manifest aktualisiert: Entfernung ' + item.file);
       render();
       setStatus('Entfernt.');
@@ -406,6 +529,8 @@ const CONFIG = {
     applyCuratorState();
     setStatus('Abgemeldet.');
   });
+
+  document.getElementById('addGroupBtn').addEventListener('click', addGroup);
 
   document.getElementById('fileInput').addEventListener('change', (e) => {
     uploadFiles([...e.target.files]);
