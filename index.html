@@ -13,8 +13,8 @@
 </style>
 <script>
   const CONFIG = {
-    owner: "Jesxer",   // z.B. "Jesxer"
-    repo:  "Jensen-Kunstgallery",           // z.B. "kunstgalerie"
+    owner: "Jesxer",
+    repo:  "Jensen-Kunstgallery",
     branch: "main"
   };
 </script>
@@ -218,7 +218,74 @@
   }
   .status.err{ color: var(--danger); }
 
+  /* View-Umschalter */
+  .view-switch{
+    display:flex; justify-content:center; gap: 0.6rem;
+    margin-bottom: 1rem;
+  }
+  .view-switch button{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.68rem; letter-spacing: 0.05em;
+    background: none; color: var(--ink-dim);
+    border: 1px solid #3a362f; border-radius: 999px;
+    padding: 0.5rem 1.1rem; cursor:pointer;
+    transition: color .2s, border-color .2s;
+  }
+  .view-switch button.active{ color: var(--brass); border-color: var(--brass-dim); }
+  .view-switch button:hover{ color: var(--brass); }
+
+  /* Blätteransicht (Coverflow) */
+  .browse{
+    display:none;
+    position: relative;
+    height: 62vh;
+    margin: 1rem 0 3rem;
+  }
+  .browse.active{ display:block; }
+  .browse-track{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .browse-item{
+    position:absolute;
+    max-height: 56vh;
+    max-width: 46vw;
+    box-shadow: 0 25px 60px -15px rgba(0,0,0,0.75);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .45s ease, filter .45s ease;
+    user-select:none;
+    -webkit-user-drag: none;
+  }
+  .browse-caption{
+    text-align:center;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    color: var(--ink-dim);
+    margin-top: 0.6rem;
+  }
+  .browse-caption .brass{ color: var(--brass); }
+  .browse-nav{
+    position:absolute; top:50%; transform: translateY(-50%);
+    background: rgba(14,13,12,0.7);
+    border: 1px solid #3a362f;
+    color: var(--ink);
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size: 1.2rem; cursor:pointer; z-index: 50;
+  }
+  .browse-nav:hover{ border-color: var(--brass-dim); color: var(--brass); }
+  .browse-nav.prev{ left: 2vw; }
+  .browse-nav.next{ right: 2vw; }
+  @media (max-width: 640px){
+    .browse-item{ max-width: 78vw; }
+    .browse-nav{ width:34px; height:34px; font-size:1rem; }
+  }
+
   input[type=file]{ display:none; }
+
 
   @media (prefers-reduced-motion: reduce){
     *{ transition:none !important; }
@@ -234,6 +301,18 @@
 </header>
 
 <main>
+  <div class="view-switch">
+    <button id="viewGridBtn" class="active">Wand</button>
+    <button id="viewBrowseBtn">Durchblättern</button>
+  </div>
+
+  <div id="browse" class="browse">
+    <div class="browse-track" id="browseTrack"></div>
+    <div class="browse-nav prev" id="browsePrev">&#8249;</div>
+    <div class="browse-nav next" id="browseNext">&#8250;</div>
+  </div>
+  <div class="browse-caption" id="browseCaption" style="display:none"></div>
+
   <div id="empty" class="empty" style="display:none">
     Die Wand ist noch leer.
     <small>Über den Kurator-Zugang unten rechts können Werke hinzugefügt werden.</small>
@@ -353,6 +432,7 @@
       sec.appendChild(secGrid);
       sectionsEl.appendChild(sec);
     });
+    if(document.getElementById('browse').classList.contains('active')) renderBrowse();
   }
 
   function populateGroupSelect(){
@@ -397,6 +477,80 @@
       setStatus(e.message, true);
     }
   }
+
+  /* ---------- Blätteransicht (Coverflow) ---------- */
+  let browseIndex = 0;
+  const browseTrack = document.getElementById('browseTrack');
+  const browseCaption = document.getElementById('browseCaption');
+
+  function renderBrowse(){
+    browseTrack.innerHTML = '';
+    const images = manifest.images;
+    if(!images.length){ browseCaption.style.display = 'none'; return; }
+    if(browseIndex < 0) browseIndex = 0;
+    if(browseIndex >= images.length) browseIndex = images.length - 1;
+
+    const range = 3;
+    for(let offset = -range; offset <= range; offset++){
+      const idx = browseIndex + offset;
+      if(idx < 0 || idx >= images.length) continue;
+      const item = images[idx];
+      const img = document.createElement('img');
+      img.className = 'browse-item';
+      img.loading = 'lazy';
+      img.src = RAW + '/images/' + encodeURIComponent(item.file);
+      img.alt = item.title || '';
+      const abs = Math.abs(offset);
+      const scale = offset === 0 ? 1 : Math.max(0.55, 1 - abs * 0.16);
+      const translate = offset * 34; // vw-Anteil, siehe Einheit unten
+      img.style.transform = 'translateX(' + translate + 'vw) scale(' + scale + ')';
+      img.style.zIndex = String(100 - abs);
+      img.style.opacity = String(offset === 0 ? 1 : Math.max(0.3, 1 - abs * 0.22));
+      img.style.filter = offset === 0 ? 'none' : 'brightness(0.55)';
+      img.addEventListener('click', () => {
+        if(idx === browseIndex) openLightbox(img.src);
+        else { browseIndex = idx; renderBrowse(); }
+      });
+      browseTrack.appendChild(img);
+    }
+    browseCaption.style.display = 'block';
+    browseCaption.innerHTML = (images[browseIndex].title || images[browseIndex].file) +
+      ' <span class="brass">' + String(browseIndex + 1).padStart(2,'0') + ' / ' + String(images.length).padStart(2,'0') + '</span>';
+  }
+
+  function browsePrev(){ if(browseIndex > 0){ browseIndex--; renderBrowse(); } }
+  function browseNext(){ if(browseIndex < manifest.images.length - 1){ browseIndex++; renderBrowse(); } }
+  document.getElementById('browsePrev').addEventListener('click', browsePrev);
+  document.getElementById('browseNext').addEventListener('click', browseNext);
+
+  let touchStartX = null;
+  browseTrack.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; }, { passive: true });
+  browseTrack.addEventListener('touchend', (e) => {
+    if(touchStartX === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if(dx > 40) browsePrev();
+    else if(dx < -40) browseNext();
+    touchStartX = null;
+  }, { passive: true });
+
+  document.addEventListener('keydown', (e) => {
+    if(!document.getElementById('browse').classList.contains('active')) return;
+    if(e.key === 'ArrowLeft') browsePrev();
+    if(e.key === 'ArrowRight') browseNext();
+  });
+
+  function setView(v){
+    const isBrowse = v === 'browse';
+    document.getElementById('browse').classList.toggle('active', isBrowse);
+    document.getElementById('sections').style.display = isBrowse ? 'none' : '';
+    document.getElementById('viewGridBtn').classList.toggle('active', !isBrowse);
+    document.getElementById('viewBrowseBtn').classList.toggle('active', isBrowse);
+    emptyEl.style.display = manifest.images.length ? 'none' : (isBrowse ? 'none' : 'block');
+    browseCaption.style.display = isBrowse && manifest.images.length ? 'block' : 'none';
+    if(isBrowse) renderBrowse();
+  }
+  document.getElementById('viewGridBtn').addEventListener('click', () => setView('grid'));
+  document.getElementById('viewBrowseBtn').addEventListener('click', () => setView('browse'));
 
   /* ---------- Lightbox ---------- */
   const lb = document.getElementById('lightbox');
