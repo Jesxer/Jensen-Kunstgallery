@@ -13,8 +13,8 @@
 </style>
 <script>
   const CONFIG = {
-    owner: "Jesxer",   // z.B. "Jesxer"
-    repo:  "Jensen-Kunstgallery",           // z.B. "kunstgalerie"
+    owner: "DEIN-GITHUB-NUTZERNAME",   // z.B. "Jesxer"
+    repo:  "DEIN-REPO-NAME",           // z.B. "kunstgalerie"
     branch: "main"
   };
 </script>
@@ -516,13 +516,24 @@
   }
 
   /* ---------- Kurator-Login ---------- */
-  document.getElementById('loginBtn').addEventListener('click', () => {
+  document.getElementById('loginBtn').addEventListener('click', async () => {
     const t = prompt('GitHub Personal Access Token (fine-grained, nur für dieses Repo, Contents: Read & Write):');
-    if(t){
-      localStorage.setItem(TOKEN_KEY, t.trim());
-      applyCuratorState();
-      setStatus('Kurator-Zugang aktiv.');
+    if(!t) return;
+    const trimmed = t.trim();
+    setStatus('Token wird geprüft …');
+    try{
+      const res = await fetch(API, { headers: { Authorization: "Bearer " + trimmed, Accept: "application/vnd.github+json" } });
+      if(!res.ok){
+        setStatus('Ungültiges Token oder kein Zugriff auf dieses Repository (Status ' + res.status + '). Kurator-Zugang nicht aktiviert.', true);
+        return;
+      }
+    }catch(e){
+      setStatus('Token konnte nicht geprüft werden: ' + e.message, true);
+      return;
     }
+    localStorage.setItem(TOKEN_KEY, trimmed);
+    applyCuratorState();
+    setStatus('Kurator-Zugang aktiv.');
   });
   document.getElementById('logoutBtn').addEventListener('click', () => {
     localStorage.removeItem(TOKEN_KEY);
