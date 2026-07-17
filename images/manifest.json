@@ -1,6 +1,10 @@
 {
-  "groups": [
-    "Alte Bilder"
-  ],
-  "images": []
+  "groups": [],
+  "images": [
+    {
+      "file": "1784284164614-00150-2026-06-11-juggernautxl-juggxibyrundiffusion.jpg",
+      "title": "00150-2026-06-11-juggernautXL_juggXIByRundiffusion",
+      "group": ""
+    }
+  ]
 }
