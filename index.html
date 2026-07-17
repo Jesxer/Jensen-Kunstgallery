@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galerie</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,450;9..144,600&family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* =========================================================
+   KONFIGURATION — hier deine GitHub-Daten eintragen
+   ========================================================= */
+</style>
+<script>
+  const CONFIG = {
+    owner: "DEIN-GITHUB-NUTZERNAME",   // z.B. "Jesxer"
+    repo:  "DEIN-REPO-NAME",           // z.B. "kunstgalerie"
+    branch: "main"
+  };
+</script>
+<style>
+  :root{
+    --wall: #161513;
+    --wall-deep: #0e0d0c;
+    --mat: #211f1c;
+    --ink: #ece7de;
+    --ink-dim: #948d81;
+    --brass: #b3925c;
+    --brass-dim: #6f5c3c;
+    --danger: #c46a5a;
+    --r: 2px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--wall);
+    background-image: radial-gradient(ellipse at 50% -10%, #201f1b 0%, var(--wall) 55%);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    min-height:100vh;
+    overflow-x:hidden;
+  }
+  ::selection{ background: var(--brass); color: var(--wall-deep); }
+
+  a, button { font-family: inherit; }
+
+  /* Header */
+  header{
+    padding: 4.5rem 6vw 2.5rem;
+    text-align:center;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--brass);
+    margin-bottom: 1rem;
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight: 450;
+    font-size: clamp(2.2rem, 6vw, 4rem);
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .sub{
+    color: var(--ink-dim);
+    font-size: 0.95rem;
+    margin-top: 0.9rem;
+    font-weight: 400;
+  }
+
+  /* Gallery */
+  main{ padding: 1rem 4vw 8rem; }
+  .empty{
+    text-align:center;
+    padding: 6rem 1rem;
+    color: var(--ink-dim);
+    font-family:'Fraunces', serif;
+    font-size: 1.3rem;
+    font-style: italic;
+  }
+  .empty small{
+    display:block;
+    font-family:'IBM Plex Mono', monospace;
+    font-style: normal;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    margin-top: 0.8rem;
+    color: var(--brass-dim);
+  }
+
+  .grid{
+    column-width: 320px;
+    column-gap: 2.2rem;
+  }
+  figure{
+    break-inside: avoid;
+    margin: 0 0 2.2rem;
+    background: var(--mat);
+    padding: 14px 14px 0;
+    border-radius: var(--r);
+    box-shadow: 0 18px 40px -20px rgba(0,0,0,0.7), 0 2px 0 rgba(255,255,255,0.02) inset;
+    position: relative;
+    cursor: zoom-in;
+    transition: transform .35s ease;
+  }
+  figure:hover{ transform: translateY(-3px); }
+  figure img{
+    width:100%;
+    display:block;
+    border-radius: 1px;
+  }
+  figcaption{
+    display:flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.7rem 0.15rem 0.9rem;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    color: var(--ink-dim);
+  }
+  figcaption .num{ color: var(--brass); }
+  figure .del{
+    position:absolute; top:8px; right:8px;
+    background: rgba(14,13,12,0.85);
+    color: var(--ink);
+    border:1px solid var(--brass-dim);
+    border-radius: 50%;
+    width: 26px; height: 26px;
+    display:none; align-items:center; justify-content:center;
+    cursor:pointer; font-size: 14px; line-height:1;
+  }
+  body.curator figure .del{ display:flex; }
+
+  /* Lightbox */
+  .lightbox{
+    position: fixed; inset: 0; background: rgba(9,8,7,0.94);
+    display:none; align-items:center; justify-content:center;
+    z-index: 200; padding: 5vh 5vw;
+    backdrop-filter: blur(6px);
+  }
+  .lightbox.open{ display:flex; }
+  .lightbox img{ max-width:100%; max-height: 88vh; box-shadow: 0 30px 80px rgba(0,0,0,0.6); }
+  .lightbox .close{
+    position:absolute; top: 24px; right: 32px;
+    color: var(--ink-dim); background:none; border:none;
+    font-size: 1.6rem; cursor:pointer;
+  }
+  .lightbox .close:hover{ color: var(--ink); }
+
+  /* Drop overlay */
+  .dropzone{
+    position: fixed; inset: 0; z-index: 150;
+    display:none; align-items:center; justify-content:center;
+    border: 2px dashed var(--brass);
+    margin: 20px;
+    background: rgba(179,146,92,0.08);
+    color: var(--brass);
+    font-family:'Fraunces', serif;
+    font-size: 1.6rem;
+    pointer-events:none;
+  }
+  body.dragging .dropzone{ display:flex; }
+
+  /* Curator controls */
+  .curator-bar{
+    position: fixed; bottom: 22px; right: 22px; z-index: 100;
+    display:flex; gap: 0.6rem; align-items:center;
+  }
+  .curator-bar button, .curator-bar label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.68rem; letter-spacing: 0.05em;
+    background: var(--mat); color: var(--ink-dim);
+    border: 1px solid #3a362f; border-radius: 999px;
+    padding: 0.55rem 1rem; cursor:pointer;
+    transition: color .2s, border-color .2s;
+  }
+  .curator-bar button:hover, .curator-bar label:hover{
+    color: var(--brass); border-color: var(--brass-dim);
+  }
+  body.curator .curator-bar .login-only{ display:none; }
+  .curator-bar .logged-only{ display:none; }
+  body.curator .curator-bar .logged-only{ display:inline-flex; }
+
+  .status{
+    position: fixed; bottom: 22px; left: 22px; z-index: 100;
+    font-family:'IBM Plex Mono', monospace; font-size: 0.7rem;
+    color: var(--ink-dim); max-width: 40ch;
+  }
+  .status.err{ color: var(--danger); }
+
+  input[type=file]{ display:none; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Private Sammlung</div>
+  <h1>Galerie</h1>
+  <div class="sub">Eine kuratierte Wand — ausschließlich Bilder.</div>
+</header>
+
+<main>
+  <div id="empty" class="empty" style="display:none">
+    Die Wand ist noch leer.
+    <small>Über den Kurator-Zugang unten rechts können Werke hinzugefügt werden.</small>
+  </div>
+  <div id="grid" class="grid"></div>
+</main>
+
+<div class="dropzone" id="dropzone">Bild hier ablegen</div>
+
+<div class="lightbox" id="lightbox">
+  <button class="close" id="lbClose">&times;</button>
+  <img id="lbImg" src="" alt="">
+</div>
+
+<div class="status" id="status"></div>
+
+<div class="curator-bar">
+  <button class="login-only" id="loginBtn">Kurator-Zugang</button>
+  <label class="logged-only" for="fileInput">+ Bild hinzufügen</label>
+  <input type="file" id="fileInput" accept="image/*" multiple>
+  <button class="logged-only" id="logoutBtn">Abmelden</button>
+</div>
+
+<script>
+(function(){
+  const API = "https://api.github.com/repos/" + CONFIG.owner + "/" + CONFIG.repo;
+  const RAW = "https://raw.githubusercontent.com/" + CONFIG.owner + "/" + CONFIG.repo + "/" + CONFIG.branch;
+  const grid = document.getElementById('grid');
+  const emptyEl = document.getElementById('empty');
+  const statusEl = document.getElementById('status');
+  const TOKEN_KEY = 'galerie_pat';
+
+  function setStatus(msg, isErr){
+    statusEl.textContent = msg || '';
+    statusEl.className = 'status' + (isErr ? ' err' : '');
+  }
+  function getToken(){ return localStorage.getItem(TOKEN_KEY); }
+
+  function applyCuratorState(){
+    document.body.classList.toggle('curator', !!getToken());
+  }
+
+  /* ---------- Manifest laden & rendern ---------- */
+  let manifest = [];
+  let manifestSha = null;
+
+  async function loadManifest(){
+    try{
+      const res = await fetch(RAW + "/images/manifest.json?_=" + Date.now());
+      if(!res.ok) throw new Error("kein Manifest gefunden");
+      manifest = await res.json();
+    }catch(e){
+      manifest = [];
+    }
+    render();
+  }
+
+  function render(){
+    grid.innerHTML = '';
+    emptyEl.style.display = manifest.length ? 'none' : 'block';
+    manifest.forEach((item, i) => {
+      const fig = document.createElement('figure');
+      fig.innerHTML =
+        '<img loading="lazy" src="' + RAW + '/images/' + encodeURIComponent(item.file) + '" alt="' + (item.title || '') + '">' +
+        '<figcaption><span>' + (item.title || item.file) + '</span><span class="num">' + String(i+1).padStart(2,'0') + '</span></figcaption>' +
+        '<div class="del" title="Entfernen">&times;</div>';
+      fig.querySelector('img').addEventListener('click', () => openLightbox(fig.querySelector('img').src));
+      fig.querySelector('.del').addEventListener('click', (ev) => { ev.stopPropagation(); removeImage(item); });
+      grid.appendChild(fig);
+    });
+  }
+
+  /* ---------- Lightbox ---------- */
+  const lb = document.getElementById('lightbox');
+  const lbImg = document.getElementById('lbImg');
+  function openLightbox(src){ lbImg.src = src; lb.classList.add('open'); }
+  function closeLightbox(){ lb.classList.remove('open'); lbImg.src=''; }
+  document.getElementById('lbClose').addEventListener('click', closeLightbox);
+  lb.addEventListener('click', (e) => { if(e.target === lb) closeLightbox(); });
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeLightbox(); });
+
+  /* ---------- GitHub Hilfsfunktionen ---------- */
+  async function ghGet(path){
+    const res = await fetch(API + "/contents/" + path, {
+      headers: { Authorization: "Bearer " + getToken(), Accept: "application/vnd.github+json" }
+    });
+    if(res.status === 404) return null;
+    if(!res.ok) throw new Error("GitHub-Fehler beim Lesen (" + res.status + ")");
+    return res.json();
+  }
+  async function ghPut(path, base64Content, message, sha){
+    const body = { message, content: base64Content, branch: CONFIG.branch };
+    if(sha) body.sha = sha;
+    const res = await fetch(API + "/contents/" + path, {
+      method: "PUT",
+      headers: {
+        Authorization: "Bearer " + getToken(),
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+    if(!res.ok){
+      const t = await res.text();
+      throw new Error("GitHub-Fehler beim Schreiben (" + res.status + "): " + t.slice(0,200));
+    }
+    return res.json();
+  }
+  async function ghDelete(path, message, sha){
+    const res = await fetch(API + "/contents/" + path, {
+      method: "DELETE",
+      headers: {
+        Authorization: "Bearer " + getToken(),
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ message, sha, branch: CONFIG.branch })
+    });
+    if(!res.ok) throw new Error("GitHub-Fehler beim Löschen (" + res.status + ")");
+  }
+  function fileToBase64(file){
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result.split(',')[1]);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+  }
+  function slugify(name){
+    const ts = Date.now();
+    const clean = name.toLowerCase().replace(/[^a-z0-9.]+/g,'-').replace(/-+/g,'-');
+    return ts + '-' + clean;
+  }
+
+  /* ---------- Manifest im Repo aktualisieren ---------- */
+  async function saveManifest(newManifest, message){
+    const current = await ghGet('images/manifest.json');
+    await ghPut(
+      'images/manifest.json',
+      btoa(unescape(encodeURIComponent(JSON.stringify(newManifest, null, 2)))),
+      message,
+      current ? current.sha : null
+    );
+    manifest = newManifest;
+  }
+
+  /* ---------- Upload ---------- */
+  async function uploadFiles(files){
+    if(!getToken()) return;
+    for(const file of files){
+      if(!file.type.startsWith('image/')) continue;
+      try{
+        setStatus('Lade hoch: ' + file.name + ' …');
+        const filename = slugify(file.name);
+        const base64 = await fileToBase64(file);
+        await ghPut('images/' + filename, base64, 'Bild hinzugefügt: ' + file.name);
+        const title = file.name.replace(/\.[^.]+$/, '');
+        const updated = manifest.concat([{ file: filename, title }]);
+        await saveManifest(updated, 'Manifest aktualisiert: ' + file.name);
+        render();
+        setStatus(file.name + ' hochgeladen.');
+      }catch(e){
+        setStatus(e.message, true);
+        console.error(e);
+      }
+    }
+  }
+
+  async function removeImage(item){
+    if(!getToken()) return;
+    if(!confirm('„' + (item.title || item.file) + '" wirklich entfernen?')) return;
+    try{
+      setStatus('Entferne ' + item.file + ' …');
+      const fileInfo = await ghGet('images/' + item.file);
+      if(fileInfo) await ghDelete('images/' + item.file, 'Bild entfernt: ' + item.file, fileInfo.sha);
+      const updated = manifest.filter(m => m.file !== item.file);
+      await saveManifest(updated, 'Manifest aktualisiert: Entfernung ' + item.file);
+      render();
+      setStatus('Entfernt.');
+    }catch(e){
+      setStatus(e.message, true);
+    }
+  }
+
+  /* ---------- Kurator-Login ---------- */
+  document.getElementById('loginBtn').addEventListener('click', () => {
+    const t = prompt('GitHub Personal Access Token (fine-grained, nur für dieses Repo, Contents: Read & Write):');
+    if(t){
+      localStorage.setItem(TOKEN_KEY, t.trim());
+      applyCuratorState();
+      setStatus('Kurator-Zugang aktiv.');
+    }
+  });
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    localStorage.removeItem(TOKEN_KEY);
+    applyCuratorState();
+    setStatus('Abgemeldet.');
+  });
+
+  document.getElementById('fileInput').addEventListener('change', (e) => {
+    uploadFiles([...e.target.files]);
+    e.target.value = '';
+  });
+
+  /* ---------- Drag & Drop überall auf der Seite ---------- */
+  let dragDepth = 0;
+  window.addEventListener('dragenter', (e) => {
+    if(!getToken()) return;
+    e.preventDefault();
+    dragDepth++;
+    document.body.classList.add('dragging');
+  });
+  window.addEventListener('dragover', (e) => { if(getToken()) e.preventDefault(); });
+  window.addEventListener('dragleave', () => {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if(dragDepth === 0) document.body.classList.remove('dragging');
+  });
+  window.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dragDepth = 0;
+    document.body.classList.remove('dragging');
+    if(!getToken()){ setStatus('Bitte zuerst über „Kurator-Zugang" anmelden.', true); return; }
+    if(e.dataTransfer.files.length) uploadFiles([...e.dataTransfer.files]);
+  });
+
+  applyCuratorState();
+  loadManifest();
+})();
+</script>
+</body>
+</html>
