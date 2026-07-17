@@ -3,5 +3,11 @@
     "Alte Bilder",
     "Neue Bilder"
   ],
-  "images": []
+  "images": [
+    {
+      "file": "1784284191320-00150-2026-06-11-juggernautxl-juggxibyrundiffusion.jpg",
+      "title": "00150-2026-06-11-juggernautXL_juggXIByRundiffusion",
+      "group": "Neue Bilder"
+    }
+  ]
 }
